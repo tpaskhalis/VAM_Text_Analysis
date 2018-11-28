@@ -3,8 +3,8 @@ title: "Reading in and cleaning the data"
 author: "Tom Paskhalis"
 date: "29 November, 2018"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -93,7 +93,7 @@ draft[3]
 
 ## Challenge 1
 
-*Easy mode* Now extract all the Directives mentioned in the Withdrawal Agreement. You can
+**Easy mode** Now extract all the Directives mentioned in the Withdrawal Agreement. You can
 either use `str_extract_all` function from `stringr` package. Otherwise,
 use `gregexpr` function from base R and pass its output to `regmatches`.
 The solution should be able to detect such directives as **Directive 92/84/EEC**,
@@ -101,14 +101,14 @@ The solution should be able to detect such directives as **Directive 92/84/EEC**
 extracted directives as a back-of-the-envelope 'topic model' to understand the
 areas that the draft Withrawal Agreement concentrated on.
 
-*Medium*: Compute a frequency table of directives mentioned and return
+**Medium**: Compute a frequency table of directives mentioned and return
 the first 10 and their corresponding frequencies. Also, show the total number of
 cited directives.
 
-*Advanced*: Produce a bar chart showing the frequencies of the
+**Advanced**: Produce a bar chart showing the frequencies of the
 top 10 directives.
 
-*Subject expert* Explore the topics to which the most mentioned directives refer.
+**Subject expert**: Explore the issues to which the most mentioned directives refer.
 
 ## Alternatives
 

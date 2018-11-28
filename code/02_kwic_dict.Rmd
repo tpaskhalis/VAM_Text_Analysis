@@ -1,0 +1,263 @@
+---
+title: "Keywords-in-Context and Dictionaries"
+author: "Tom Paskhalis"
+date: "29 November, 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, message=FALSE}
+library("readr")
+library("dplyr")
+library("stringr")
+library("lubridate")
+library("stopwords")
+library("quanteda")
+```
+
+## Reading in the file
+
+We use the Congressional Record date from the current (115th Congress). There
+are 4 datasets, with one for each year and each chamber. All are stored in the
+`data` folder and comressed with gzip to save space.
+
+```{r read-in, message=FALSE}
+# House of Representatives
+us_house_2017 <- readr::read_csv("../data/us-house-2017.csv.gz")
+us_house_2018 <- readr::read_csv("../data/us-house-2018.csv.gz")
+# Senate
+us_senate_2017 <- readr::read_csv("../data/us-senate-2017.csv.gz")
+us_senate_2018 <- readr::read_csv("../data/us-senate-2018.csv.gz")
+```
+
+While the Senate speeches comes with many additional covariates, House data is
+more limited in this regard. However, we can extract date from the API field
+`granuleId`, using this, rather convoluted, regular expression.
+
+```{r year}
+pattern <- "20\\d\\d-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])"
+us_house_2017 <- us_house_2017 %>%
+    dplyr::mutate(date = lubridate::ymd(stringr::str_extract(granuleId, pattern)))
+us_house_2018 <- us_house_2018 %>%
+    dplyr::mutate(date = lubridate::ymd(stringr::str_extract(granuleId, pattern)))
+```
+
+## Create Corpus
+
+First, we combine the datasets for two chambers (House of Representatives and Senate)
+and two years (2017 and 2018) into one. Then, we can create a corpus by simply
+passing the resultant data frame to `corpus()` function in `quanteda`. The variable
+`text` is automatically recognised as the one containing the speeches and all the
+other variables are treated as `docvars`.
+
+```{r congress}
+congress115 <- dplyr::select(us_house_2017, date, chamber, speaker, text) %>%
+  dplyr::bind_rows(dplyr::select(us_house_2018, date, chamber, speaker, text)) %>%
+  dplyr::bind_rows(dplyr::select(us_senate_2017, date, chamber, speaker, text)) %>%
+  dplyr::bind_rows(dplyr::select(us_senate_2018, date, chamber, speaker, text))
+
+head(congress115, 10)
+```
+
+```{r corpus}
+corpus115 <- quanteda::corpus(congress115)
+head(docvars(corpus115), 10)
+```
+
+We can get some basic summary statistics by applying `summary()` on the corpus.
+
+```{r summary}
+summary(corpus115, 10)
+```
+
+## Document-frequency matrix and summary statistics
+
+We are removing stopwords pre-specified in the `stopwords()` function. For more
+details check the associated package `stopwords`.
+
+```{r stopwords}
+stopwords::stopwords("english")
+```
+
+To create a document-frequency matrix, we will use `dfm()` function. Many of the
+parameters specified (such as `tolowe` and `stem`) below are the defaults,
+but it is often a good idea to be explicit about document pre-processing,
+as it starts gradually getting more attention in the text analysis literature.
+
+```{r dfm}
+dfm115 <- quanteda::dfm(corpus115,
+                        tolower = TRUE,
+                        stem = FALSE,
+                        remove = stopwords("english"),
+                        remove_punct = TRUE)
+```
+
+We can also group by chamber when creating a `dfm`.
+
+```{r grouped_dfm}
+grouped115 <- quanteda::dfm(corpus115,
+                            tolower = TRUE,
+                            stem = FALSE,
+                            remove = stopwords("english"),
+                            remove_punct = TRUE,
+                            group = "chamber")
+```
+
+To see the most frequently used terms we use the `topfeatures()` function.
+
+```{r topfeatures}
+quanteda::topfeatures(dfm115, 50)
+```
+
+We can also use `textstat_keyness()` function to compare how words are used
+across groups of documents.
+Here we are treating the Senate as a target group and House as the reference.
+
+```{r keyness}
+keyness <- quanteda::textstat_keyness(grouped115, target = "S")
+
+head(keyness, 10)
+tail(keyness, 10)
+```
+
+## Keywords-in-context
+
+The idea to inspect the terms of interest within the smaller window of words
+surrounding it was one of the first to emerge in automatic analysis of text.
+Here, we will focus on a few issues that polarised US politics in the past
+two years. In order to do that we will use `kwic()`
+function and `textplot_xray()` for the graphical represenation of the results.
+Note that we need to apply `kwic()` to a corpus, rather than a dfm.
+
+Let us start with the **Deferred Action for Childhood Arrivals**
+(also known as DACA), the immigration policy that has been subject of much
+debate under Trump's administration.
+
+```{r daca}
+daca <- quanteda::kwic(corpus115, "daca", window = 5, valuetype = "fixed")
+
+head(daca, 50)
+```
+
+Interestingly, DACA is frequently mentioned in the context of other executive act,
+**Deferred Action for Parents of Americans and Lawful Permanent Residents (DAPA)**,
+that extended DACA to the parents of the 'Dreamers'. Let us now explore its context:
+
+```{r dapa}
+dapa <- quanteda::kwic(corpus115, "dapa", window = 5, valuetype = "fixed")
+
+head(dapa, 50)
+```
+
+Looking at the number of rows of the resultant objects, it appears that DAPA
+usually occurs in the context of the DACA discussion.
+
+```{r nrow}
+nrow(daca)
+nrow(dapa)
+```
+
+Plotting the kwic object using the current corpus is problematic due to the
+large number of documents. Let us make the original corpus more manageable by
+merging together all speeches within the same month in House and Senate. We pass
+`docid_field` parameter to get a more intuitive text labelling for the plot.
+
+```{r aggregate}
+aggregate115 <- congress115 %>%
+  dplyr::mutate(year = as.character(lubridate::year(date)),
+                month = as.character(lubridate::month(date)),
+                year_month_chamber = paste(year, month, chamber, sep = "-")) %>%
+  dplyr::group_by(year_month_chamber) %>%
+  dplyr::summarise(text = paste(text, collapse = " "))
+
+aggregate115 <- quanteda::corpus(aggregate115,
+                                 docid_field = "year_month_chamber")
+```
+
+Now we can apply the `textplot_xray()` function to get some insight into the
+distribution of the mentions of DACA over time and over chambers.
+
+```{r xray}
+quanteda::textplot_xray(kwic(aggregate115, "daca", window = 5, valuetype = "fixed"))
+```
+
+From the plot we can see that the bulk of the discussion took place in winter
+2017/18 with somewhat higher number of mentions in the Senate.
+
+## Dictionaries
+
+Despite being perhaps the oldest analytical technique, dicitonaries are still
+frequently used by many researchers. To define a simple dictionary we will
+a `dictionary()` function.
+
+```{r dictionary}
+dict <- quanteda::dictionary(
+  list(trade = c("trade", "business", "corp*"),
+       tax = c("tariff", "fiscal", "tax*"),
+       regulation = c("law", "agreement", "deal", "regul*")))
+```
+
+To apply the dictionary we create another dfm and pass the dictionary as an argument.
+Another way to apply it is to use `dfm_lookup()` function to the already existing
+dfm.
+
+```{r dict}
+dict115 <- quanteda::dfm(corpus115, dictionary = dict)
+head(dict115)
+
+# Or, equivalently
+lookup115 <- quanteda::dfm_lookup(dfm115, dict, valuetype = "glob")
+```
+
+While helpful for certain kinds of analysis, a more useful approach might be to
+apply dictionary to a grouped dfm.
+
+```{r grouped_dict}
+dict115 <- quanteda::dfm(grouped115, dictionary = dict)
+head(dict115)
+
+# It's also useful to see the proportions
+quanteda::dfm_weight(dict115, scheme = "prop")
+```
+
+Let us now use some automatic heuristics to create a dictionary from a given seed.
+We will use `trade` as our seed word and then proceed to explore the words most
+often used together with it, but exclude those used in the corpus more generally.
+
+```{r}
+trade115 <- congress115 %>%
+  dplyr::filter(grepl("trade", text))
+
+trade115 <- quanteda::corpus(trade115)
+
+# Extract most used terms in all the documents
+top115 <- topfeatures(dfm115, 100)
+
+# Extract most used terms in trade-related documents
+toptrade115 <- topfeatures(dfm(trade115, remove = stopwords("en"), remove_numbers = TRUE, remove_punct = TRUE), 100)
+
+# As this is a named vector, we will apply names() function
+autodict <- names(toptrade115)[!(names(toptrade115) %in% names(top115))]
+autodict
+```
+
+## Challenge 2
+
+**Easy mode** Explore the context of the words *gun* and *firearm* with the
+`kwic()` function. Are there any issues with the default setting?
+Treat them as `glob` to capture plural forms.
+
+**Medium** Now plot the kwic objects on the aggregated corpus ot explore when and
+where these issues were discussed in the US Congress in the last two years.
+
+**Advanced** To make the previous plot a bit nicer and easier to read,
+order the aggregated texts by year, month, chamber. To do this, you would need
+to modify the ordering of levels in the `aggregate115` dataset.
+
+**Subject Expert** Create a dictionary related to gun violence and firearms
+control and apply to Congress debates.
