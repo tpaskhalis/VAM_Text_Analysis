@@ -119,7 +119,8 @@ quanteda::topfeatures(dfm115, 50)
 
 We can also use `textstat_keyness()` function to compare how words are used
 across groups of documents.
-Here we are treating the Senate as a target group and House as the reference.
+Here we are treating the Senate as a target group and House as the reference. 
+What differences do you notice between the two chambers?
 
 ```{r keyness}
 keyness <- quanteda::textstat_keyness(grouped115, target = "S")
@@ -200,9 +201,9 @@ a `dictionary()` function.
 
 ```{r dictionary}
 dict <- quanteda::dictionary(
-  list(trade = c("trade", "business", "corp*"),
-       tax = c("tariff", "fiscal", "tax*"),
-       regulation = c("law", "agreement", "deal", "regul*")))
+  list(trade = c("trade", "tariff*", "trade agreement", "wto", "import", "export"),
+       tax = c("fiscal", "tax*", "cuts", "treasury", "irs"),
+       regulation = c("law", "regul*", "business", "shall", "must")))
 ```
 
 To apply the dictionary we create another dfm and pass the dictionary as an argument.
@@ -213,7 +214,8 @@ dfm.
 dict115 <- quanteda::dfm(corpus115, dictionary = dict)
 head(dict115)
 
-# Or, equivalently
+# Or, equivalently:
+# `glob` refers to wildcards like "*" rather than regular expression
 lookup115 <- quanteda::dfm_lookup(dfm115, dict, valuetype = "glob")
 ```
 
@@ -221,6 +223,7 @@ While helpful for certain kinds of analysis, a more useful approach might be to
 apply dictionary to a grouped dfm.
 
 ```{r grouped_dict}
+# Grouped by chamber
 dict115 <- quanteda::dfm(grouped115, dictionary = dict)
 head(dict115)
 
@@ -233,6 +236,7 @@ We will use `trade` as our seed word and then proceed to explore the words most
 often used together with it, but exclude those used in the corpus more generally.
 
 ```{r}
+# Select all texts with "trade"
 trade115 <- congress115 %>%
   dplyr::filter(grepl("trade", text))
 
@@ -244,6 +248,7 @@ top115 <- topfeatures(dfm115, 100)
 # Extract most used terms in trade-related documents
 toptrade115 <- topfeatures(dfm(trade115, remove = stopwords("en"), remove_numbers = TRUE, remove_punct = TRUE), 100)
 
+# Get all the top words in toptrade that are not in the overall corpus
 # As this is a named vector, we will apply names() function
 autodict <- names(toptrade115)[!(names(toptrade115) %in% names(top115))]
 autodict
@@ -255,7 +260,7 @@ autodict
 `kwic()` function. Are there any issues with the default setting?
 Treat them as `glob` to capture plural forms.
 
-**Medium** Now plot the kwic objects on the aggregated corpus ot explore when and
+**Medium** Now plot the kwic objects on the aggregated corpus and explore when and
 where these issues were discussed in the US Congress in the last two years.
 
 **Advanced** To make the previous plot a bit nicer and easier to read,

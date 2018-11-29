@@ -136,14 +136,14 @@ library(&quot;stopwords&quot;)
 library(&quot;quanteda&quot;)</code></pre>
 <div id="reading-in-the-file" class="section level2">
 <h2>Reading in the file</h2>
-<p>We use the Congressional Record date from the current (115th Congress). There are 4 datasets, with one for each year and each chamber. All are stored in the <code>data</code> folder and comressed with gzip to save space.</p>
+<p>We use the Congressional Record date from the current (115th) Congress. There are 4 datasets, with one for each year and each chamber. All are stored in the <code>data</code> folder and comressed with gzip to save space.</p>
 <pre class="r"><code># House of Representatives
 us_house_2017 &lt;- readr::read_csv(&quot;../data/us-house-2017.csv.gz&quot;)
 us_house_2018 &lt;- readr::read_csv(&quot;../data/us-house-2018.csv.gz&quot;)
 # Senate
 us_senate_2017 &lt;- readr::read_csv(&quot;../data/us-senate-2017.csv.gz&quot;)
 us_senate_2018 &lt;- readr::read_csv(&quot;../data/us-senate-2018.csv.gz&quot;)</code></pre>
-<p>While the Senate speeches comes with many additional covariates, House data is more limited in this regard. However, we can extract date from the API field <code>granuleId</code>, using this, rather convoluted, regular expression.</p>
+<p>While the Senate speeches come with many additional covariates, House data is more limited in this regard. However, we can extract date from the API field <code>granuleId</code>, using this, rather convoluted, regular expression.</p>
 <pre class="r"><code>pattern &lt;- &quot;20\\d\\d-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])&quot;
 us_house_2017 &lt;- us_house_2017 %&gt;%
     dplyr::mutate(date = lubridate::ymd(stringr::str_extract(granuleId, pattern)))
@@ -173,7 +173,7 @@ head(congress115, 10)</code></pre>
 ##  9 2017-01-03 H       Ms PLASKETT durin… Madam Clerk, parliamentary inqui…
 ## 10 2017-01-03 H       The CLERK          The gentlewoman will state her p…</code></pre>
 <pre class="r"><code>corpus115 &lt;- quanteda::corpus(congress115)
-head(docvars(corpus115), 10)</code></pre>
+head(quanteda::docvars(corpus115), 10)</code></pre>
 <pre><code>##              date chamber                          speaker
 ## text1  2017-01-03       H                        The CLERK
 ## text2  2017-01-03       H                        The CLERK
@@ -213,7 +213,7 @@ head(docvars(corpus115), 10)</code></pre>
 ##                         The CLERK
 ## 
 ## Source: /home/tpaskhalis/Decrypted/Git/VAM_Text_Analysis/code/* on x86_64 by tpaskhalis
-## Created: Wed Nov 28 23:22:32 2018
+## Created: Thu Nov 29 13:10:52 2018
 ## Notes:</code></pre>
 </div>
 <div id="document-frequency-matrix-and-summary-statistics" class="section level2">
@@ -255,18 +255,20 @@ head(docvars(corpus115), 10)</code></pre>
 ## [161] &quot;most&quot;       &quot;other&quot;      &quot;some&quot;       &quot;such&quot;       &quot;no&quot;        
 ## [166] &quot;nor&quot;        &quot;not&quot;        &quot;only&quot;       &quot;own&quot;        &quot;same&quot;      
 ## [171] &quot;so&quot;         &quot;than&quot;       &quot;too&quot;        &quot;very&quot;       &quot;will&quot;</code></pre>
-<p>To create a document-frequency matrix, we will use <code>dfm()</code> function. Many of the parameters specified (such as <code>tolowe</code> and <code>stem</code>) below are the defaults, but it is often a good idea to be explicit about document pre-processing, as it starts gradually getting more attention in the text analysis literature.</p>
+<p>To create a document-frequency matrix, we will use <code>dfm()</code> function. Many of the parameters specified (such as <code>tolower</code> and <code>stem</code>) below are the defaults, but it is often a good idea to be explicit about document pre-processing, as it starts gradually getting more attention in the text analysis literature. We are keeping the numbers, as they can refer to the bills being debated.</p>
 <pre class="r"><code>dfm115 &lt;- quanteda::dfm(corpus115,
                         tolower = TRUE,
                         stem = FALSE,
                         remove = stopwords(&quot;english&quot;),
-                        remove_punct = TRUE)</code></pre>
+                        remove_punct = TRUE,
+                        remove_numbers = FALSE)</code></pre>
 <p>We can also group by chamber when creating a <code>dfm</code>.</p>
 <pre class="r"><code>grouped115 &lt;- quanteda::dfm(corpus115,
                             tolower = TRUE,
                             stem = FALSE,
                             remove = stopwords(&quot;english&quot;),
                             remove_punct = TRUE,
+                            remove_numbers = FALSE,
                             group = &quot;chamber&quot;)</code></pre>
 <p>To see the most frequently used terms we use the <code>topfeatures()</code> function.</p>
 <pre class="r"><code>quanteda::topfeatures(dfm115, 50)</code></pre>
@@ -286,7 +288,7 @@ head(docvars(corpus115), 10)</code></pre>
 ##     31795     31124     30981     30563     30408     30215     30154 
 ##      vote 
 ##     30058</code></pre>
-<p>We can also use <code>textstat_keyness()</code> function to compare how words are used across groups of documents. Here we are treating the Senate as a target group and House as the reference.</p>
+<p>We can also use <code>textstat_keyness()</code> function to compare how words are used across groups of documents. Here we are treating the Senate as a target group and House as the reference. What differences do you notice between the two chambers?</p>
 <pre class="r"><code>keyness &lt;- quanteda::textstat_keyness(grouped115, target = &quot;S&quot;)
 
 head(keyness, 10)</code></pre>
@@ -527,43 +529,46 @@ aggregate115 &lt;- quanteda::corpus(aggregate115,
 <h2>Dictionaries</h2>
 <p>Despite being perhaps the oldest analytical technique, dicitonaries are still frequently used by many researchers. To define a simple dictionary we will a <code>dictionary()</code> function.</p>
 <pre class="r"><code>dict &lt;- quanteda::dictionary(
-  list(trade = c(&quot;trade&quot;, &quot;business&quot;, &quot;corp*&quot;),
-       tax = c(&quot;tariff&quot;, &quot;fiscal&quot;, &quot;tax*&quot;),
-       regulation = c(&quot;law&quot;, &quot;agreement&quot;, &quot;deal&quot;, &quot;regul*&quot;)))</code></pre>
+  list(trade = c(&quot;trade&quot;, &quot;tariff*&quot;, &quot;trade agreement&quot;, &quot;wto&quot;, &quot;import&quot;, &quot;export&quot;),
+       tax = c(&quot;fiscal&quot;, &quot;tax*&quot;, &quot;cuts&quot;, &quot;treasury&quot;, &quot;irs&quot;),
+       regulation = c(&quot;law&quot;, &quot;regul*&quot;, &quot;business&quot;, &quot;shall&quot;, &quot;must&quot;)))</code></pre>
 <p>To apply the dictionary we create another dfm and pass the dictionary as an argument. Another way to apply it is to use <code>dfm_lookup()</code> function to the already existing dfm.</p>
 <pre class="r"><code>dict115 &lt;- quanteda::dfm(corpus115, dictionary = dict)
 head(dict115)</code></pre>
-<pre><code>## Document-feature matrix of: 6 documents, 3 features (77.8% sparse).
+<pre><code>## Document-feature matrix of: 6 documents, 3 features (83.3% sparse).
 ## 6 x 3 sparse Matrix of class &quot;dfm&quot;
 ##        features
 ## docs    trade tax regulation
 ##   text1     0   0          0
 ##   text2     0   0          2
 ##   text3     0   0          0
-##   text4     1   0          1
+##   text4     0   0          2
 ##   text5     0   0          1
 ##   text6     0   0          0</code></pre>
-<pre class="r"><code># Or, equivalently
+<pre class="r"><code># Or, equivalently:
+# `glob` refers to wildcards like &quot;*&quot; rather than regular expression
 lookup115 &lt;- quanteda::dfm_lookup(dfm115, dict, valuetype = &quot;glob&quot;)</code></pre>
 <p>While helpful for certain kinds of analysis, a more useful approach might be to apply dictionary to a grouped dfm.</p>
-<pre class="r"><code>dict115 &lt;- quanteda::dfm(grouped115, dictionary = dict)
+<pre class="r"><code># Grouped by chamber
+dict115 &lt;- quanteda::dfm(grouped115, dictionary = dict)
 head(dict115)</code></pre>
 <pre><code>## Document-feature matrix of: 2 documents, 3 features (0.0% sparse).
 ## 2 x 3 sparse Matrix of class &quot;dfm&quot;
 ##     features
 ## docs trade   tax regulation
-##    H 18819 37212      43785
-##    S 15964 27905      31188</code></pre>
+##    H  3545 42936      99504
+##    S  3688 32456      50239</code></pre>
 <pre class="r"><code># It's also useful to see the proportions
 quanteda::dfm_weight(dict115, scheme = &quot;prop&quot;)</code></pre>
 <pre><code>## Document-feature matrix of: 2 documents, 3 features (0.0% sparse).
 ## 2 x 3 sparse Matrix of class &quot;dfm&quot;
 ##     features
-## docs     trade       tax regulation
-##    H 0.1885369 0.3728060  0.4386571
-##    S 0.2126917 0.3717841  0.4155242</code></pre>
+## docs      trade       tax regulation
+##    H 0.02428332 0.2941124  0.6816043
+##    S 0.04269359 0.3757221  0.5815843</code></pre>
 <p>Let us now use some automatic heuristics to create a dictionary from a given seed. We will use <code>trade</code> as our seed word and then proceed to explore the words most often used together with it, but exclude those used in the corpus more generally.</p>
-<pre class="r"><code>trade115 &lt;- congress115 %&gt;%
+<pre class="r"><code># Select all texts with &quot;trade&quot;
+trade115 &lt;- congress115 %&gt;%
   dplyr::filter(grepl(&quot;trade&quot;, text))
 
 trade115 &lt;- quanteda::corpus(trade115)
@@ -574,6 +579,7 @@ top115 &lt;- topfeatures(dfm115, 100)
 # Extract most used terms in trade-related documents
 toptrade115 &lt;- topfeatures(dfm(trade115, remove = stopwords(&quot;en&quot;), remove_numbers = TRUE, remove_punct = TRUE), 100)
 
+# Get all the top words in toptrade that are not in the overall corpus
 # As this is a named vector, we will apply names() function
 autodict &lt;- names(toptrade115)[!(names(toptrade115) %in% names(top115))]
 autodict</code></pre>
@@ -593,7 +599,7 @@ autodict</code></pre>
 <div id="challenge-2" class="section level2">
 <h2>Challenge 2</h2>
 <p><strong>Easy mode</strong> Explore the context of the words <em>gun</em> and <em>firearm</em> with the <code>kwic()</code> function. Are there any issues with the default setting? Treat them as <code>glob</code> to capture plural forms.</p>
-<p><strong>Medium</strong> Now plot the kwic objects on the aggregated corpus ot explore when and where these issues were discussed in the US Congress in the last two years.</p>
+<p><strong>Medium</strong> Now plot the kwic objects on the aggregated corpus and explore when and where these issues were discussed in the US Congress in the last two years.</p>
 <p><strong>Advanced</strong> To make the previous plot a bit nicer and easier to read, order the aggregated texts by year, month, chamber. To do this, you would need to modify the ordering of levels in the <code>aggregate115</code> dataset.</p>
 <p><strong>Subject Expert</strong> Create a dictionary related to gun violence and firearms control and apply to Congress debates.</p>
 </div>
