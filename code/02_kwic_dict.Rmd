@@ -22,7 +22,7 @@ library("quanteda")
 
 ## Reading in the file
 
-We use the Congressional Record date from the current (115th Congress). There
+We use the Congressional Record date from the current (115th) Congress. There
 are 4 datasets, with one for each year and each chamber. All are stored in the
 `data` folder and comressed with gzip to save space.
 
@@ -35,7 +35,7 @@ us_senate_2017 <- readr::read_csv("../data/us-senate-2017.csv.gz")
 us_senate_2018 <- readr::read_csv("../data/us-senate-2018.csv.gz")
 ```
 
-While the Senate speeches comes with many additional covariates, House data is
+While the Senate speeches come with many additional covariates, House data is
 more limited in this regard. However, we can extract date from the API field
 `granuleId`, using this, rather convoluted, regular expression.
 
@@ -66,7 +66,7 @@ head(congress115, 10)
 
 ```{r corpus}
 corpus115 <- quanteda::corpus(congress115)
-head(docvars(corpus115), 10)
+head(quanteda::docvars(corpus115), 10)
 ```
 
 We can get some basic summary statistics by applying `summary()` on the corpus.
@@ -85,16 +85,18 @@ stopwords::stopwords("english")
 ```
 
 To create a document-frequency matrix, we will use `dfm()` function. Many of the
-parameters specified (such as `tolowe` and `stem`) below are the defaults,
+parameters specified (such as `tolower` and `stem`) below are the defaults,
 but it is often a good idea to be explicit about document pre-processing,
 as it starts gradually getting more attention in the text analysis literature.
+We are keeping the numbers, as they can refer to the bills being debated.
 
 ```{r dfm}
 dfm115 <- quanteda::dfm(corpus115,
                         tolower = TRUE,
                         stem = FALSE,
                         remove = stopwords("english"),
-                        remove_punct = TRUE)
+                        remove_punct = TRUE,
+                        remove_numbers = FALSE)
 ```
 
 We can also group by chamber when creating a `dfm`.
@@ -105,6 +107,7 @@ grouped115 <- quanteda::dfm(corpus115,
                             stem = FALSE,
                             remove = stopwords("english"),
                             remove_punct = TRUE,
+                            remove_numbers = FALSE,
                             group = "chamber")
 ```
 
