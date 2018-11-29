@@ -1,0 +1,201 @@
+---
+title: "Topic Models"
+author: "Tom Paskhalis"
+date: "29 November, 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, message=FALSE}
+library("readr")
+library("dplyr")
+library("quanteda")
+library("topicmodels")
+library("stm")
+```
+
+## US Senate
+
+To fit topic models, we will restrict our analysis to US Senate. First, it makes
+our corpus smaller and, thus, speed up estimation process. And, second, it
+contains some covariates that we might be interested in when fitting structural
+topic models. Let us first read in the datasets and combine them together as
+in the previous part.
+
+```{r read-in, message=FALSE}
+# Senate
+us_senate_2017 <- readr::read_csv("../data/us-senate-2017.csv.gz")
+us_senate_2018 <- readr::read_csv("../data/us-senate-2018.csv.gz")
+
+senate115 <- us_senate_2017 %>%
+  dplyr::bind_rows(us_senate_2018)
+
+nrow(senate115)
+head(senate115, 10)
+```
+
+After inspecting the dataset, we can see that a lot of the rows contain procedural
+statements by presiding officers of the Senate. As we might be interested in the
+topical content of the speeches, rather than procedural discussion, we can remove
+those:
+
+```{r remove}
+senate115 <- senate115 %>%
+  dplyr::filter(!is.na(first_name))
+
+nrow(senate115)
+head(senate115, 10)
+```
+
+Although we lost some observations, it is still a quite sizeable dataset. Now,
+we can proceed with creating a corpus and dfm in the usual way.
+
+```{r corpus}
+corpus115 <- quanteda::corpus(senate115)
+head(quanteda::docvars(corpus115), 10)
+```
+
+```{r summary}
+summary(corpus115, 10)
+```
+
+As some speeches might be very short and not very informative, let us first trim
+the corpus by applying `corpus_trim()` function.
+
+```{r trim_corpus}
+pre <- quanteda::ndoc(corpus115)
+
+corpus115 <- corpus115 %>%
+  quanteda::corpus_trim(what = "documents", min_ntoken = 10)
+
+post <- quanteda::ndoc(corpus115)
+c(pre, post, pre-post)
+```
+
+To make the model less computationally expensive, we will reduce the number of
+features by stemming the tokens.
+
+```{r dfm}
+dfm115 <- quanteda::dfm(corpus115,
+                        tolower = TRUE,
+                        stem = TRUE,
+                        remove = stopwords("english"),
+                        remove_punct = TRUE)
+```
+
+Before fitting the model, let us further trim the dataset by removing infrequent
+tokens. To do that, we will be using `dfm_trim()` function. There are several
+options to trim the dfm. One, which we are using here is to specify the
+minimum number of documents in which a given token occurs (`min_docfreq`).
+Another would be to specify the minimum number of times a token should be used
+across all the documents (`min_termfreq`) to remain in the dfm.
+
+```{r trim}
+dfm115 <- quanteda::dfm_trim(dfm115, min_docfreq = 2)
+```
+
+## Latent Dirichlet Allocation (LDA)
+
+Let us start with the original implementation of topic models, also called
+Latent Dirichlet Allocation (or LDA for short). Another way to think about a
+topic model is as Bayesian mixed-membership. If you have encountered mixture
+models before, where each observed unit (say, an individual) belongs to a latent
+class, here we allow each observed unit (document) to belong to multiple 
+classes.
+
+We will be using the package `topicmodels` and function `LDA()`. This is
+essentially an R wrapper around C code, implemented by the authors of LDA.
+
+The crucial analytical decision to be made when fitting a topic model is to
+specify a numer of topics ($k$). Here, we will just pick 10 as a starting value
+and then come back to diagnostics at a later stage.
+
+```{r lda, results="hide", cache=TRUE}
+k <- 10
+lda <- topicmodels::LDA(dfm115,
+                        k = k,
+                        method = "Gibbs",
+                        control = list(verbose=25L,
+                                       seed = 123,
+                                       burnin = 100,
+                                       iter = 500))
+```
+
+Instead of using more traditional Gibbs sampling for Bayesian estimation, we
+can also try variational inference (`VEM`). Experiment with this. Mind that
+corpus is still considerably large. It might take some time for this model
+to converge!
+
+```{r vem, eval=FALSE}
+k <- 10
+lda <- LDA(dfm115,
+           k = k,
+           method = "VEM")
+```
+
+After fitting the model, we can inspect the top `n` terms from the model with
+`get_terms()` function and predict top `k` topcs for each document with
+`get_topics()` function.
+
+```{r inspect}
+topicmodels::terms(lda, 10)
+head(topicmodels::topics(lda, 1), 10)
+```
+
+## Structural Topic Models (STM)
+
+The original approach for topic modelling did not allow for the topical content
+to depend on any of the document covariates. Structural topic models introduced
+the possibility to incorporate this metadata into the estimation process. Here
+we will be using `stm` package and the function with the same name: `stm()`. 
+Let us start with incorporating gender as a covariate.
+
+```{r stm, results="hide", cache=TRUE}
+stm115 <- stm::stm(dfm115, K = k, data = docvars(dfm115), prevalence = ~ gender)
+```
+
+To view the top terms by various statistics we can use `laelTopics()` function:
+
+```{r topics}
+stm::labelTopics(stm115, n = 10)
+```
+
+To plot the estimated effect of gender on the topics, we can use `estimateEffect()`
+function from the `stm` package and an in-built `plot` method for the resultant
+object.
+
+```{r plot}
+md115 <- stm::estimateEffect(1:10 ~ gender, stmobj = stm115, metadata = docvars(dfm115))
+plot(md115, "gender", cov.value1 = "M", cov.value2 = "F", method = "difference")
+```
+
+A few other useful functions in the `stm` package are `searchK()` for the diagnostics
+of the number of topics, `topicQuality()` for assesing the quality of the model fit.
+See the examples below:
+
+```{r diag, eval=FALSE}
+# Before we can proceed with using searchK, we need to prepare our dfm.
+dfm115stm <- quanteda::convert(dfm115, to = "stm", docvars = docvars(dfm115))
+kdiag <- searchK(documents = dfm115stm[["documents"]],
+                 vocab = dfm115stm[["vocab"]],
+                 K = seq(5,50,5))
+plot(kdiag)
+
+topicQuality(stm115, documents = quanteda::convert(dfm115, to = "stm"))
+```
+
+## Challenge 3
+
+**Easy mode** Experiment with `LDA` by fitting it with a different number of topics
+and observing how it affects the top terms.
+
+**Medium** Calculate age in years for each senator and use it alongside gender
+as a covariate for topic models. Use `lubridate` package for calculating the age.
+
+**Advanced** Produce a coefficients plot for the estimated model. 
+Try `ggplot2` package to make it appear nicer.
