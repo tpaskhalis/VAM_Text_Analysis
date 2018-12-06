@@ -1,0 +1,114 @@
+---
+title: "Keywords-in-Context and Dictionaries"
+subtitle: "Solutions"
+author: "Tom Paskhalis"
+date: "29 November, 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, message=FALSE}
+# Load libraries
+library("readr")
+library("dplyr")
+library("stringr")
+library("lubridate")
+library("quanteda")
+```
+
+```{r prepare, echo=FALSE, message=FALSE}
+# House of Representatives
+us_house_2017 <- readr::read_csv("../data/us-house-2017.csv.gz")
+us_house_2018 <- readr::read_csv("../data/us-house-2018.csv.gz")
+# Senate
+us_senate_2017 <- readr::read_csv("../data/us-senate-2017.csv.gz")
+us_senate_2018 <- readr::read_csv("../data/us-senate-2018.csv.gz")
+
+pattern <- "20\\d\\d-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])"
+us_house_2017 <- us_house_2017 %>%
+    dplyr::mutate(date = lubridate::ymd(stringr::str_extract(granuleId, pattern)))
+us_house_2018 <- us_house_2018 %>%
+    dplyr::mutate(date = lubridate::ymd(stringr::str_extract(granuleId, pattern)))
+
+congress115 <- dplyr::select(us_house_2017, date, chamber, speaker, text) %>%
+  dplyr::bind_rows(dplyr::select(us_house_2018, date, chamber, speaker, text)) %>%
+  dplyr::bind_rows(dplyr::select(us_senate_2017, date, chamber, speaker, text)) %>%
+  dplyr::bind_rows(dplyr::select(us_senate_2018, date, chamber, speaker, text))
+
+corpus115 <- quanteda::corpus(congress115)
+
+aggregate115 <- congress115 %>%
+  dplyr::mutate(year = as.character(lubridate::year(date)),
+                month = as.character(lubridate::month(date)),
+                year_month_chamber = paste(year, month, chamber, sep = "-")) %>%
+  dplyr::group_by(year_month_chamber) %>%
+  dplyr::summarise(text = paste(text, collapse = " "))
+
+aggregate115 <- quanteda::corpus(aggregate115,
+                                 docid_field = "year_month_chamber")
+```
+
+## Challenge 2
+
+**Easy mode** Explore the context of the words *gun* and *firearm* with the
+`kwic()` function. Are there any issues with the default setting?
+Treat them as `glob` to capture plural forms.
+
+```{r answers2_easy}
+guns <- quanteda::kwic(corpus115, "gun*", window = 5, valuetype = "glob")
+head(guns, 50)
+
+firearms <- quanteda::kwic(corpus115, "firearm*", window = 5, valuetype = "glob")
+head(firearms, 50)
+```
+
+**Medium** Now plot the kwic objects on the aggregated corpus ot explore when and
+where these issues were discussed in the US Congress in the last two years.
+
+```{r plot1}
+quanteda::textplot_xray(kwic(aggregate115, "gun*", window = 5, valuetype = "glob"))
+```
+
+**Advanced** To make the previous plot a bit nicer, order the aggregated texts
+by year, month, chamber. To do this, you would need to modify the ordering of
+levels in the `aggregate115` dataset.
+
+```{r answer2_advanced}
+# Let us start from automatically creating the levels of text name
+years <- rep(rep(c("2017", "2018"), times = c(12,11)), times = 2)
+months <- rep(as.character(seq(1,12)), times = 2)
+# Remove the last element as we don't have data for December 2018
+months <- rep(months[-length(months)], times = 2)
+chamber <- rep(c("H", "S"), each = 23)
+# As Map() returns list we need to flatten it into vector
+lev <- unlist(Map(function(x, y, z) paste(x, y, z, sep = "-"), years, months, chamber))
+
+aggregate115 <- congress115 %>%
+  dplyr::mutate(year = as.character(lubridate::year(date)),
+                month = as.character(lubridate::month(date)),
+                year_month_chamber = paste(year, month, chamber, sep = "-")) %>%
+  dplyr::mutate(year_month_chamber = factor(year_month_chamber,
+                                            levels = lev)) %>%
+  dplyr::group_by(year_month_chamber) %>%
+  dplyr::summarise(text = paste(text, collapse = " "))
+
+aggregate115 <- quanteda::corpus(aggregate115,
+                                 docid_field = "year_month_chamber")
+```
+
+```{r plot2}
+quanteda::textplot_xray(kwic(aggregate115, "gun*", window = 5, valuetype = "glob"))
+```
+
+The gun debate, seemingly, intensified around February-March 2018 in both chambers,
+in the aftermath of the number of school shootings. While Las Vegas shooting
+in October 2017 saw a spike in frequency of references to guns in Congress, it
+was less prominent than the one in early 2018.
+
+**Subject Expert** Create a dictionary related to gun violence and firearms
+control and apply to Congress debates.
