@@ -1,10 +1,10 @@
 ---
 title: "Topic Models"
 author: "Tom Paskhalis"
-date: "29 November, 2018"
+date: "31 January, 2019"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -112,8 +112,13 @@ We will be using the package `topicmodels` and function `LDA()`. This is
 essentially an R wrapper around C code, implemented by the authors of LDA.
 
 The crucial analytical decision to be made when fitting a topic model is to
-specify a numer of topics ($k$). Here, we will just pick 10 as a starting value
-and then come back to diagnostics at a later stage.
+specify a number of topics ($k$). Here, we will just pick 10 as a starting value
+and then come back to diagnostics at a later stage. To run MCMC sampler we
+specify the `burnin` period of 100 iterations, that are discarded from the
+analysis of resultant chains and keep the remaining 500 (It is a relatively low
+number and in real-life analysis, it is better to have a few thousand iterations).
+The parameter `verbose` is just an integer indicating the number of iterations
+after which the output gets updated while the model is running.
 
 ```{r lda, results="hide", cache=TRUE}
 k <- 10
@@ -133,9 +138,9 @@ to converge!
 
 ```{r vem, eval=FALSE}
 k <- 10
-lda <- LDA(dfm115,
-           k = k,
-           method = "VEM")
+lda <- topicmodels::LDA(dfm115,
+                        k = k,
+                        method = "VEM")
 ```
 
 After fitting the model, we can inspect the top `n` terms from the model with
@@ -178,7 +183,7 @@ A few other useful functions in the `stm` package are `searchK()` for the diagno
 of the number of topics, `topicQuality()` for assesing the quality of the model fit.
 See the examples below:
 
-```{r diag, eval=FALSE}
+```{r diag, results="hide", cache=TRUE}
 # Before we can proceed with using searchK, we need to prepare our dfm.
 dfm115stm <- quanteda::convert(dfm115, to = "stm", docvars = docvars(dfm115))
 kdiag <- searchK(documents = dfm115stm[["documents"]],

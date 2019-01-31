@@ -1,0 +1,7 @@
+base
+readr
+dplyr
+quanteda
+topicmodels
+stm
+bindrcpp

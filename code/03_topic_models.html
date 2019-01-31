@@ -97,6 +97,9 @@ img {
 button.code-folding-btn:focus {
   outline: none;
 }
+summary {
+  display: list-item;
+}
 </style>
 
 
@@ -104,14 +107,74 @@ button.code-folding-btn:focus {
 <div class="container-fluid main-container">
 
 <!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "";
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
 <script>
 $(document).ready(function () {
   window.buildTabsets("TOC");
 });
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open')
+  });
+});
 </script>
 
 <!-- code folding -->
-
 
 
 
@@ -123,7 +186,7 @@ $(document).ready(function () {
 
 <h1 class="title toc-ignore">Topic Models</h1>
 <h4 class="author"><em>Tom Paskhalis</em></h4>
-<h4 class="date"><em>29 November, 2018</em></h4>
+<h4 class="date"><em>31 January, 2019</em></h4>
 
 </div>
 
@@ -159,9 +222,9 @@ nrow(senate115)</code></pre>
 ##  8 S       The PR… 2017-01-03 With… &lt;NA&gt;       &lt;NA&gt;      &lt;NA&gt;  &lt;NA&gt;  
 ##  9 S       Mr DUR… 2017-01-03 Mr. … Richard    durbin    Demo… M     
 ## 10 S       The PR… 2017-01-03 The … &lt;NA&gt;       &lt;NA&gt;      &lt;NA&gt;  &lt;NA&gt;  
-## # ... with 8 more variables: birthday &lt;date&gt;, state &lt;chr&gt;, url &lt;chr&gt;,
-## #   twitter &lt;chr&gt;, facebook &lt;chr&gt;, govtrack_id &lt;int&gt;, icpsr_id &lt;int&gt;,
-## #   votesmart_id &lt;int&gt;</code></pre>
+## # … with 8 more variables: birthday &lt;date&gt;, state &lt;chr&gt;, url &lt;chr&gt;,
+## #   twitter &lt;chr&gt;, facebook &lt;chr&gt;, govtrack_id &lt;dbl&gt;, icpsr_id &lt;dbl&gt;,
+## #   votesmart_id &lt;dbl&gt;</code></pre>
 <p>After inspecting the dataset, we can see that a lot of the rows contain procedural statements by presiding officers of the Senate. As we might be interested in the topical content of the speeches, rather than procedural discussion, we can remove those:</p>
 <pre class="r"><code>senate115 &lt;- senate115 %&gt;%
   dplyr::filter(!is.na(first_name))
@@ -182,9 +245,9 @@ nrow(senate115)</code></pre>
 ##  8 S       Mr MOR… 2017-01-03 Mr. … Jerry      moran     Repu… M     
 ##  9 S       Mr McC… 2017-01-03 Mr. … Mitch      mcconnell Repu… M     
 ## 10 S       Mr McC… 2017-01-03 Mr. … Mitch      mcconnell Repu… M     
-## # ... with 8 more variables: birthday &lt;date&gt;, state &lt;chr&gt;, url &lt;chr&gt;,
-## #   twitter &lt;chr&gt;, facebook &lt;chr&gt;, govtrack_id &lt;int&gt;, icpsr_id &lt;int&gt;,
-## #   votesmart_id &lt;int&gt;</code></pre>
+## # … with 8 more variables: birthday &lt;date&gt;, state &lt;chr&gt;, url &lt;chr&gt;,
+## #   twitter &lt;chr&gt;, facebook &lt;chr&gt;, govtrack_id &lt;dbl&gt;, icpsr_id &lt;dbl&gt;,
+## #   votesmart_id &lt;dbl&gt;</code></pre>
 <p>Although we lost some observations, it is still a quite sizeable dataset. Now, we can proceed with creating a corpus and dfm in the usual way.</p>
 <pre class="r"><code>corpus115 &lt;- quanteda::corpus(senate115)
 head(quanteda::docvars(corpus115), 10)</code></pre>
@@ -270,7 +333,7 @@ head(quanteda::docvars(corpus115), 10)</code></pre>
 ##       300072    14921        53298
 ## 
 ## Source: /home/tpaskhalis/Decrypted/Git/VAM_Text_Analysis/code/* on x86_64 by tpaskhalis
-## Created: Thu Nov 29 12:40:17 2018
+## Created: Thu Jan 31 13:56:42 2019
 ## Notes:</code></pre>
 <p>As some speeches might be very short and not very informative, let us first trim the corpus by applying <code>corpus_trim()</code> function.</p>
 <pre class="r"><code>pre &lt;- quanteda::ndoc(corpus115)
@@ -294,7 +357,7 @@ c(pre, post, pre-post)</code></pre>
 <h2>Latent Dirichlet Allocation (LDA)</h2>
 <p>Let us start with the original implementation of topic models, also called Latent Dirichlet Allocation (or LDA for short). Another way to think about a topic model is as Bayesian mixed-membership. If you have encountered mixture models before, where each observed unit (say, an individual) belongs to a latent class, here we allow each observed unit (document) to belong to multiple classes.</p>
 <p>We will be using the package <code>topicmodels</code> and function <code>LDA()</code>. This is essentially an R wrapper around C code, implemented by the authors of LDA.</p>
-<p>The crucial analytical decision to be made when fitting a topic model is to specify a numer of topics (<span class="math inline">\(k\)</span>). Here, we will just pick 10 as a starting value and then come back to diagnostics at a later stage.</p>
+<p>The crucial analytical decision to be made when fitting a topic model is to specify a number of topics (<span class="math inline">\(k\)</span>). Here, we will just pick 10 as a starting value and then come back to diagnostics at a later stage. To run MCMC sampler we specify the <code>burnin</code> period of 100 iterations, that are discarded from the analysis of resultant chains and keep the remaining 500 (It is a relatively low number and in real-life analysis, it is better to have a few thousand iterations). The parameter <code>verbose</code> is just an integer indicating the number of iterations after which the output gets updated while the model is running.</p>
 <pre class="r"><code>k &lt;- 10
 lda &lt;- topicmodels::LDA(dfm115,
                         k = k,
@@ -305,9 +368,9 @@ lda &lt;- topicmodels::LDA(dfm115,
                                        iter = 500))</code></pre>
 <p>Instead of using more traditional Gibbs sampling for Bayesian estimation, we can also try variational inference (<code>VEM</code>). Experiment with this. Mind that corpus is still considerably large. It might take some time for this model to converge!</p>
 <pre class="r"><code>k &lt;- 10
-lda &lt;- LDA(dfm115,
-           k = k,
-           method = &quot;VEM&quot;)</code></pre>
+lda &lt;- topicmodels::LDA(dfm115,
+                        k = k,
+                        method = &quot;VEM&quot;)</code></pre>
 <p>After fitting the model, we can inspect the top <code>n</code> terms from the model with <code>get_terms()</code> function and predict top <code>k</code> topcs for each document with <code>get_topics()</code> function.</p>
 <pre class="r"><code>topicmodels::terms(lda, 10)</code></pre>
 <pre><code>##       Topic 1   Topic 2 Topic 3    Topic 4    Topic 5    Topic 6   
