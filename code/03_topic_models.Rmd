@@ -3,8 +3,8 @@ title: "Topic Models"
 author: "Tom Paskhalis"
 date: "31 January, 2019"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -174,7 +174,7 @@ To plot the estimated effect of gender on the topics, we can use `estimateEffect
 function from the `stm` package and an in-built `plot` method for the resultant
 object.
 
-```{r plot}
+```{r plot, fig.align='center'}
 md115 <- stm::estimateEffect(1:10 ~ gender, stmobj = stm115, metadata = docvars(dfm115))
 plot(md115, "gender", cov.value1 = "M", cov.value2 = "F", method = "difference")
 ```
@@ -183,7 +183,7 @@ A few other useful functions in the `stm` package are `searchK()` for the diagno
 of the number of topics, `topicQuality()` for assesing the quality of the model fit.
 See the examples below:
 
-```{r diag, results="hide", cache=TRUE}
+```{r diag, fig.align='center', results="hide", cache=TRUE}
 # Before we can proceed with using searchK, we need to prepare our dfm.
 dfm115stm <- quanteda::convert(dfm115, to = "stm", docvars = docvars(dfm115))
 kdiag <- searchK(documents = dfm115stm[["documents"]],
@@ -191,7 +191,7 @@ kdiag <- searchK(documents = dfm115stm[["documents"]],
                  K = seq(5,50,5))
 plot(kdiag)
 
-topicQuality(stm115, documents = quanteda::convert(dfm115, to = "stm"))
+stm::topicQuality(stm115, documents = dfm115)
 ```
 
 ## Challenge 3
